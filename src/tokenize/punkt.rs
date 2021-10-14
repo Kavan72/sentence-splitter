@@ -196,6 +196,88 @@ impl <'a>PunktLanguageVars<'a> {
     }
 }
 
+
+#[derive(Debug, Clone)]
+pub struct PunktToken {
+    token: String,
+    type_: String,
+    period_final: bool,
+    para_start: Option<bool>,
+    line_start: Option<bool>,
+    sent_break: Option<bool>,
+    abbr: Option<bool>,
+    ellipsis: Option<bool>
+}
+
+impl PunktToken {
+    fn new(token: &str, para_start: bool, line_start: bool) -> Self {
+        Self {
+            token: token.to_string(),
+            type_: Self::_get_type(token),
+            period_final: token.ends_with("."),
+            para_start: Some(para_start),
+            line_start: Some(line_start),
+            sent_break: None,
+            abbr: None,
+            ellipsis: None
+        }
+    }
+
+    fn _get_type(tok: &str) -> String {
+        fancy_regex::Regex::new(r"(?xm) ^-?[\.,]?\d[\d,\.-]*\.?$")
+            .unwrap()
+            .replace(&tok.to_lowercase(), "##number##")
+            .to_string()
+    }
+
+    fn type_no_period(&self) -> String {
+        if self.type_.len() > 1 && self.type_.chars().last().unwrap() == '.' {
+            return self.type_[0..self.type_.len()-1].to_string()
+        }
+        return self.type_.clone()
+    }
+
+    fn type_no_sent_period(&self) -> String {
+        return match self.sent_break {
+            Some(true) => self.type_no_period(),
+            _ => self.type_.clone()
+        }
+    }
+
+    fn first_upper(&self) -> bool {
+        self.tok.chars().nth(0).unwrap().is_uppercase()
+    }
+
+    fn first_lower(&self) -> bool {
+        self.tok.chars().nth(0).unwrap().is_lowercase()
+    }
+
+    fn first_case(&self) -> &'static str {
+        if self.first_lower() {
+            return "lower"
+        } else if self.first_upper() {
+            return "lower"
+        }
+        return "none"
+    }
+
+    fn is_ellipsis(&self) -> bool {
+        fancy_regex::Regex::new(r"^(\.\.+$)")
+            .unwrap()
+            .find(&self.tok).unwrap().is_some()
+    }
+
+    fn is_number(&self) -> bool {
+        self.tok.starts_with("##number##")
+    }
+
+    fn is_initial(&self) -> bool {
+        fancy_regex::Regex::new(r"^([^\W\d]\.$)")
+            .unwrap()
+            .find(&self.tok).unwrap().is_some()
+    }
+}
+
 #[cfg(test)]
 mod punkt_parameters_tests {
 
