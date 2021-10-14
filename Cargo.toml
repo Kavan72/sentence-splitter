@@ -1,0 +1,16 @@
+[package]
+name = "sentence-splitter"
+version = "0.1.0"
+authors = ["Kavan Vadaliya <vadaliya.kavan@gmail.com>"]
+edition = "2018"
+description = ""
+repository = "https://github.com/kavan72/sentence-splitter"
+license = ""
+readme = "README.md"
+keywords = ["nlp", "sentence-splitter", "machine-learning", "transformers", "tokenizer"]
+
+
+[dependencies]
+fancy-regex = "0.7.1"
+serde_json = "1.0.68"
+serde = { version = "1.0.130", features = ["derive"] }
