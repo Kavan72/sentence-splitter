@@ -1,1 +1,1 @@
-mod punkt;
+pub mod punkt;

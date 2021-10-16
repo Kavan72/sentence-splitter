@@ -1,3 +1,6 @@
+use crate::helper::slice::StringSlice;
+
+use std::{fs};
 use fancy_regex::*;
 use std::ops::{BitOr};
 use serde::{Serialize, Deserialize};
@@ -13,6 +16,23 @@ static _ORTHO_UNK_LC: usize = 1 << 6;
 static _ORTHO_UC: usize = _ORTHO_BEG_UC + _ORTHO_MID_UC + _ORTHO_UNK_UC;
 static _ORTHO_LC: usize = _ORTHO_BEG_LC + _ORTHO_MID_LC + _ORTHO_UNK_LC;
 
+
+#[derive(Clone, Copy)]
+pub struct Slice {
+    start: usize,
+    end: usize,
+}
+
+
+fn pair_iter<T: Clone>(it: Vec<T>) -> Vec<(T, Option<T>)> {
+     it.iter().enumerate().map( | (index, obj) | (it[index], if index + 1 < it.len() { Some(it[index + 1]) } else { None })).collect::<Vec<_>>()
+}
+
+#[derive(PartialEq)]
+enum Return<'a> {
+    Bool(bool),
+    String(&'a str),
+}
 
 #[derive(Serialize, Deserialize, Debug, Hash)]
 pub struct Collocations (
@@ -192,7 +212,12 @@ impl <'a>PunktLanguageVars<'a> {
     }
 
     fn word_tokenize<'r, 't>(&self, string: String) -> Vec<String> {
-        self.punkt_language_pros._word_tokenizer_re.find_iter(&string).into_iter().flatten().map(|m|String::from(m.as_str())).collect::<Vec<String>>()
+        self.punkt_language_pros._word_tokenizer_re
+            .find_iter(&string)
+            .into_iter()
+            .flatten()
+            .map(|m|m.as_str().to_string())
+            .collect::<Vec<String>>()
     }
 }
 
@@ -245,11 +270,11 @@ impl PunktToken {
     }
 
     fn first_upper(&self) -> bool {
-        self.tok.chars().nth(0).unwrap().is_uppercase()
+        self.token.chars().nth(0).unwrap().is_uppercase()
     }
 
     fn first_lower(&self) -> bool {
-        self.tok.chars().nth(0).unwrap().is_lowercase()
+        self.token.chars().nth(0).unwrap().is_lowercase()
     }
 
     fn first_case(&self) -> &'static str {
@@ -264,17 +289,314 @@ impl PunktToken {
     fn is_ellipsis(&self) -> bool {
         fancy_regex::Regex::new(r"^(\.\.+$)")
             .unwrap()
-            .find(&self.tok).unwrap().is_some()
+            .find(&self.token).unwrap().is_some()
     }
 
     fn is_number(&self) -> bool {
-        self.tok.starts_with("##number##")
+        self.token.starts_with("##number##")
     }
 
     fn is_initial(&self) -> bool {
         fancy_regex::Regex::new(r"^([^\W\d]\.$)")
             .unwrap()
-            .find(&self.tok).unwrap().is_some()
+            .find(&self.token).unwrap().is_some()
+    }
+}
+
+#[derive(Debug)]
+pub struct PunktBaseClass<'a> {
+    lang_vars: PunktLanguageVars<'a>,
+    params: PunktParameters
+}
+
+impl <'a>PunktBaseClass<'a> {
+
+    fn new(lang_vars: Option<PunktLanguageVars<'a>>, params: Option<PunktParameters>) -> Self {
+        Self {
+            lang_vars: lang_vars.unwrap_or(PunktLanguageVars::new()),
+            params: params.unwrap_or(PunktParameters::new())
+        }
+    }
+
+    fn _tokenize_words(&self, plaintext: &str) -> Vec<PunktToken> {
+        let mut parastart: bool = false;
+        let mut tokens: Vec<PunktToken> = Vec::new();
+
+        for line in plaintext.lines() {
+            if !line.trim().is_empty() {
+
+                let mut line_toks = self.lang_vars.word_tokenize(line.to_string()).into_iter();
+
+                let tok = line_toks.next();
+
+                if tok.is_none(){
+                    continue
+                }
+
+                tokens.push(
+                    PunktToken::new(
+                        &tok.unwrap(),
+                        parastart,
+                        true
+                    )
+                );
+
+                parastart = false;
+
+                for t in line_toks {
+                    tokens.push(
+                        PunktToken::new(
+                            &t,
+                            parastart,
+                            true
+                        )
+                    );
+                }
+            } else {
+                parastart = true
+            }
+        }
+
+        return tokens
+    }
+
+    fn _annotate_first_pass(&self, tokens: Vec<PunktToken>) -> Vec<PunktToken> {
+        tokens.into_iter().map(|mut x| { self._first_pass_annotation(&mut x); return x }).collect()
+    }
+
+    fn _first_pass_annotation(&self, aug_tok: &mut PunktToken){
+        let token = &aug_tok.token;
+        if self.lang_vars.punkt_language_static_vars.sent_end_chars.contains(token.as_str()) {
+            aug_tok.sent_break = Some(true)
+        } else if aug_tok.is_ellipsis() {
+            aug_tok.ellipsis = Some(true)
+        } else if aug_tok.period_final && !token.ends_with("..") {
+
+            let lower_token = token[0..token.len()-1].to_lowercase();
+
+            if self.params.abbrev_types.contains(&lower_token)
+                ||
+                self.params.abbrev_types.contains(lower_token.split("-").last().unwrap()) {
+                aug_tok.abbr = Some(true)
+            } else {
+                aug_tok.sent_break = Some(true)
+            }
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct PunktSentenceTokenizer<'a> {
+    punkt_base_class: PunktBaseClass<'a>,
+}
+
+impl PunktSentenceTokenizer<'_> {
+
+    fn new(weight_file_path: &str) -> Self {
+        let json_file_string = fs::read_to_string(weight_file_path).expect("Unable to read weight file.");
+        let weights: PunktParameters = serde_json::from_str(&json_file_string).expect("Unable to parse weight file.");
+
+        Self {
+            punkt_base_class: PunktBaseClass::new(None, Some(weights)),
+        }
+    }
+
+    fn tokenize(&self, text: &str, realign_boundaries: bool) -> Vec<String> {
+        self.sentences_from_text(text, realign_boundaries)
+    }
+
+    fn span_tokenize(&self, text: &str, realign_boundaries: bool) -> Vec<(usize, usize)> {
+        let mut slices = self._slices_from_text(text);
+
+        if realign_boundaries {
+            slices = self._realign_boundaries(text, slices);
+        }
+
+        slices.iter().map( |x| (x.start, x.end)).collect()
+    }
+
+    fn sentences_from_text(&self, text: &str, realign_boundaries: bool) -> Vec<String> {
+        self.span_tokenize(text, realign_boundaries).into_iter().map(move | slice | text.try_slice(slice.0..slice.1).unwrap_or("").to_string()).collect()
+    }
+
+    fn _slices_from_text(&self, text: &str) -> Vec<Slice> {
+        let mut last_break = 0;
+        let mut slice: Vec<Slice> = Vec::new();
+
+        for _match in self.punkt_base_class.lang_vars.punkt_language_pros.period_context_re.captures_iter(text) {
+
+            let context = format!(
+                "{group}{after_tok}",
+                group=_match.as_ref().unwrap().get(0).expect("No").as_str(),
+                after_tok=_match.as_ref().unwrap().name("after_tok").unwrap().as_str()
+            );
+
+            if self.text_contains_sentbreak(&context) {
+                slice.push(
+                    Slice {
+                        start: last_break,
+                        end: _match.as_ref().unwrap().get(0).unwrap().end()
+                    }
+                );
+
+                last_break = match _match.as_ref().unwrap().name("next_tok") {
+                    Some(m) => m.start(),
+                    None => _match.as_ref().unwrap().get(0).unwrap().end()
+                }
+            }
+        }
+        slice.push(
+            Slice {
+                start: last_break,
+                end: text.trim_start().len()
+            }
+        );
+        slice
+    }
+
+    fn _realign_boundaries(&self, text: &str, slices: Vec<Slice>) -> Vec<Slice> {
+        let mut boundaries: Vec<Slice> = Vec::new();
+        let mut realign: usize = 0;
+
+        for (mut sl1, sl2) in pair_iter(slices) {
+
+            sl1 = Slice {
+                start: sl1.start + realign,
+                end: sl1.end
+            };
+
+            if sl2.is_none() {
+                if text.try_slice(sl1.start..sl1.end).is_some() {
+                    boundaries.push(sl1.clone())
+                }
+                continue
+            }
+
+            let m = self.punkt_base_class.lang_vars.punkt_language_static_vars.re_boundary_realignment.find(
+                text.try_slice(sl2.unwrap().start..sl2.unwrap().end).unwrap_or("")
+            ).unwrap();
+
+            if m.is_some() {
+                boundaries.push(Slice {
+                    start: sl1.start,
+                    end: sl2.unwrap().start + m.unwrap().as_str().trim_start().len()
+                });
+                realign = m.unwrap().end()
+            } else {
+                realign = 0;
+                if text.try_slice(sl1.start..sl1.end).is_some() {
+                    boundaries.push(sl1.clone())
+                }
+            }
+        }
+
+        return boundaries
+    }
+
+    fn text_contains_sentbreak(&self, text: &str) -> bool {
+        let mut found = false;
+        for t in self._annotate_tokens(self.punkt_base_class._tokenize_words(text)) {
+            if found {
+                return true
+            }
+            if t.sent_break.unwrap_or(false) {
+                found = true
+            }
+        }
+        return false
+    }
+
+    fn _annotate_tokens(&self, tokens: Vec<PunktToken>) -> Vec<PunktToken> {
+        return self._annotate_second_pass(self.punkt_base_class._annotate_first_pass(tokens));
+    }
+
+    fn _annotate_second_pass(&self, tokens: Vec<PunktToken>) -> Vec<PunktToken> {
+        let mut new_tokens: Vec<PunktToken> = Vec::new();
+
+        for (mut t1, mut t2) in pair_iter(tokens).iter() {
+            self._second_pass_annotation(&mut t1, &mut t2);
+            new_tokens.push(t1)
+        }
+        return new_tokens
+    }
+
+    fn _second_pass_annotation(&self, aug_tok1: &mut PunktToken, aug_tok2: &mut Option<PunktToken>) {
+
+        if aug_tok2.is_none() {
+            return
+        }
+
+        if !aug_tok1.period_final {
+            return
+        }
+
+        let typ = aug_tok1.type_no_period();
+        let next_typ = aug_tok2.as_ref().unwrap().type_no_sent_period();
+        let tok_is_initial = aug_tok1.is_initial();
+
+        if self.punkt_base_class.params.collocations.contains(
+            &Collocations(typ.clone(), next_typ.clone())
+        ) {
+            aug_tok1.sent_break = Some(false);
+            aug_tok1.abbr = Some(true);
+            return;
+        }
+
+        if (aug_tok1.abbr.unwrap_or(false) || aug_tok1.ellipsis.unwrap_or(false)) && !tok_is_initial {
+            let is_sent_starter: Return = self._ortho_heuristic(&aug_tok2.as_ref().unwrap());
+
+            if Return::Bool(true) == is_sent_starter {
+                aug_tok1.sent_break = Some(true);
+                return
+            }
+
+            if aug_tok2.as_ref().unwrap().first_upper() && self.punkt_base_class.params.sent_starters.contains(next_typ.as_str()) {
+                aug_tok1.sent_break = Some(true);
+                return;
+            }
+        }
+
+        if tok_is_initial || typ == "##number##" {
+            let is_sent_starter: Return = self._ortho_heuristic(&aug_tok2.as_ref().unwrap());
+
+            if Return::Bool(false) == is_sent_starter {
+                aug_tok1.sent_break = Some(false);
+                aug_tok1.abbr = Some(true);
+                return
+            }
+
+            if Return::String("unknown") == is_sent_starter
+                &&
+                tok_is_initial
+                &&
+                aug_tok2.as_ref().unwrap().first_upper()
+                &&
+                (self.punkt_base_class.params.get_ortho_context(&next_typ) & _ORTHO_LC) == 0
+            {
+                aug_tok1.sent_break = Some(false);
+                aug_tok1.abbr = Some(true);
+                return
+            }
+        }
+    }
+
+    fn _ortho_heuristic(&self, aug_tok: &PunktToken) -> Return {
+        if [";", ":", ",", ".", "!", "?"].contains(&aug_tok.token.as_str()) {
+            return Return::Bool(false)
+        }
+
+        let ortho_context = self.punkt_base_class.params.get_ortho_context(&aug_tok.type_no_sent_period());
+
+        if aug_tok.first_upper() && (ortho_context & _ORTHO_LC) != 0 && !(ortho_context & _ORTHO_MID_UC) != 0 {
+            return Return::Bool(true)
+        }
+
+        if aug_tok.first_lower() && (ortho_context & _ORTHO_UC) != 0 && !(ortho_context & _ORTHO_BEG_LC) != 0 {
+            return Return::Bool(false)
+        }
+
+        return Return::String("unknown")
     }
 }
 
