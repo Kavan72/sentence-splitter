@@ -17,7 +17,7 @@ static _ORTHO_UC: usize = _ORTHO_BEG_UC + _ORTHO_MID_UC + _ORTHO_UNK_UC;
 static _ORTHO_LC: usize = _ORTHO_BEG_LC + _ORTHO_MID_LC + _ORTHO_UNK_LC;
 
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Slice {
     start: usize,
     end: usize,
@@ -25,7 +25,7 @@ pub struct Slice {
 
 
 fn pair_iter<T: Clone>(it: Vec<T>) -> Vec<(T, Option<T>)> {
-     it.iter().enumerate().map( | (index, obj) | (it[index], if index + 1 < it.len() { Some(it[index + 1]) } else { None })).collect::<Vec<_>>()
+     it.iter().enumerate().map( | (index, _obj) | (it[index].clone(), if index + 1 < it.len() { Some(it[index + 1].clone()) } else { None })).collect::<Vec<_>>()
 }
 
 #[derive(PartialEq)]
@@ -277,6 +277,7 @@ impl PunktToken {
         self.token.chars().nth(0).unwrap().is_lowercase()
     }
 
+    #[allow(dead_code)]
     fn first_case(&self) -> &'static str {
         if self.first_lower() {
             return "lower"
@@ -292,6 +293,7 @@ impl PunktToken {
             .find(&self.token).unwrap().is_some()
     }
 
+    #[allow(dead_code)]
     fn is_number(&self) -> bool {
         self.token.starts_with("##number##")
     }
@@ -417,7 +419,7 @@ impl PunktSentenceTokenizer<'_> {
     }
 
     fn sentences_from_text(&self, text: &str, realign_boundaries: bool) -> Vec<String> {
-        self.span_tokenize(text, realign_boundaries).into_iter().map(move | slice | text.try_slice(slice.0..slice.1).unwrap_or("").to_string()).collect()
+        self.span_tokenize(text, realign_boundaries).into_iter().map(move | slice | text[slice.0..slice.1].to_string()).collect()
     }
 
     fn _slices_from_text(&self, text: &str) -> Vec<Slice> {
@@ -514,7 +516,7 @@ impl PunktSentenceTokenizer<'_> {
     fn _annotate_second_pass(&self, tokens: Vec<PunktToken>) -> Vec<PunktToken> {
         let mut new_tokens: Vec<PunktToken> = Vec::new();
 
-        for (mut t1, mut t2) in pair_iter(tokens).iter() {
+        for (mut t1, mut t2) in pair_iter(tokens) {
             self._second_pass_annotation(&mut t1, &mut t2);
             new_tokens.push(t1)
         }
@@ -604,7 +606,7 @@ impl PunktSentenceTokenizer<'_> {
 mod punkt_parameters_tests {
 
     use std::collections::{HashMap, HashSet};
-    use crate::tokenize::punkt::{PunktParameters, Collocations, PunktLanguageVars};
+    use crate::tokenize::punkt::{PunktParameters, Collocations, PunktSentenceTokenizer};
 
     pub fn get_static_data() -> PunktParameters {
         PunktParameters {
@@ -625,11 +627,27 @@ mod punkt_parameters_tests {
     "#;
 
     #[test]
-    fn test() {
-        let string = String::from("A last thing to note about key sentences is that academic readers expect them to be at the beginning of the paragraph");
-        let sec = PunktLanguageVars::new();
-        let data = sec.word_tokenize(string);
-        println!("{:?}", data);
+    fn test_tokenize() {
+
+        let string = r#"Both versions convey a topic; it’s pretty easy to predict that the paragraph will be about epidemiological evidence, but only the second version establishes an argumentative point and puts it in context.
+        The paragraph doesn’t just describe the epidemiological evidence; it shows how epidemiology is telling the same story as etiology.
+        Similarly, while Version A doesn’t relate to anything in particular, Version B immediately suggests that the prior paragraph addresses the biological pathway of a disease and that the new paragraph will bolster the emerging hypothesis with a different kind of evidence.
+        As a reader, it’s easy to keep track of how the paragraph about cells and chemicals and such relates to the paragraph about populations in different places.
+        A last thing to note about key sentences is that academic readers expect them to be at the beginning of the paragraph.
+        (The first sentence this paragraph is a good example of this in action!)
+        This placement helps readers comprehend your argument.
+        To see how, try this: find an academic piece (such as a textbook or scholarly article) that strikes you as well written and go through part of it reading just the first sentence of each paragraph.
+        You should be able to easily follow the sequence of logic.
+        When you’re writing for professors, it is especially effective to put your key sentences first because they usually convey your own original thinking.
+        It’s a very good sign when your paragraphs are typically composed of a telling key sentence followed by evidence and explanation."#;
+
+        let punkt_sentence_tokenizer = PunktSentenceTokenizer::new(
+            "english.json"
+        );
+
+        let sentences = punkt_sentence_tokenizer.tokenize(string, true);
+
+        assert_eq!(sentences.len(), 11);
     }
 
     #[test]

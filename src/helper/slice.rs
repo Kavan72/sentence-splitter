@@ -32,13 +32,7 @@ impl StringSlice for str {
         if begin > end {
             None
         } else {
-            let mut ch_idx = self.char_indices().map(|(i, _c)| i);
-
-            let len = self.len();
-            let begin_ch = ch_idx.nth(begin).unwrap_or(len);
-            let end_ch = ch_idx.nth(end - begin - 1).unwrap_or(len);
-
-            unsafe { Some(&self.get_unchecked(begin_ch..end_ch)) }
+            unsafe { Some(&self.get_unchecked(begin..end)) }
         }
     }
 }
