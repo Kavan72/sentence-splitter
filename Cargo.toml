@@ -3,9 +3,9 @@ name = "sentence-splitter"
 version = "0.1.0"
 authors = ["Kavan Vadaliya <vadaliya.kavan@gmail.com>"]
 edition = "2018"
-description = ""
+description = "Split sentence from paragraph using nlp"
 repository = "https://github.com/kavan72/sentence-splitter"
-license = ""
+license = "MIT License"
 readme = "README.md"
 keywords = ["nlp", "sentence-splitter", "machine-learning", "transformers", "tokenizer"]
 
