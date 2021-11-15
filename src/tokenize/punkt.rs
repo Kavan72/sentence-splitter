@@ -398,7 +398,7 @@ pub struct PunktSentenceTokenizer<'a> {
 
 impl PunktSentenceTokenizer<'_> {
 
-    fn new(weight_file_path: Option<&str>, language: Option<Language>) -> Self {
+    pub fn new(weight_file_path: Option<&str>, language: Option<Language>) -> Self {
 
         let json_file_string = match weight_file_path {
             Some(path) => fs::read_to_string(path).expect("Unable to read weight file."),
