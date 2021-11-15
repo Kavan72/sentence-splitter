@@ -404,7 +404,7 @@ impl PunktSentenceTokenizer<'_> {
             Some(path) => fs::read_to_string(path).expect("Unable to read weight file."),
             None => {
                 let config_resource = Resource::Remote(RemoteResource::new(
-                    format!("https://raw.githubusercontent.com/Kavan72/sentence-splitter/master/data/weights/{}", language.unwrap().to_string()).as_str(),
+                    format!("https://raw.githubusercontent.com/Kavan72/sentence-splitter/master/data/weights/{}.json", language.unwrap().to_string()).as_str(),
                     format!("punkt/{}", language.unwrap().to_string()).as_str(),
                 ));
                 fs::read_to_string(config_resource.get_local_path().unwrap()).expect("Unable to read weight file.")
