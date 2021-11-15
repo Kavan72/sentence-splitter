@@ -1,10 +1,13 @@
+use crate::helper::common::Language;
 use crate::helper::slice::StringSlice;
+use crate::helper::resources::{Resource, RemoteResource};
 
 use std::{fs};
 use fancy_regex::*;
 use std::ops::{BitOr};
 use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, HashSet};
+
 
 static _ORTHO_BEG_UC: usize = 1 << 1;
 static _ORTHO_MID_UC: usize = 1 << 2;
@@ -395,8 +398,19 @@ pub struct PunktSentenceTokenizer<'a> {
 
 impl PunktSentenceTokenizer<'_> {
 
-    fn new(weight_file_path: &str) -> Self {
-        let json_file_string = fs::read_to_string(weight_file_path).expect("Unable to read weight file.");
+    fn new(weight_file_path: Option<&str>, language: Option<Language>) -> Self {
+
+        let json_file_string = match weight_file_path {
+            Some(path) => fs::read_to_string(path).expect("Unable to read weight file."),
+            None => {
+                let config_resource = Resource::Remote(RemoteResource::new(
+                    format!("https://raw.githubusercontent.com/Kavan72/sentence-splitter/master/data/weights/{}", language.unwrap().to_string()).as_str(),
+                    format!("punkt/{}", language.unwrap().to_string()).as_str(),
+                ));
+                fs::read_to_string(config_resource.get_local_path().unwrap()).expect("Unable to read weight file.")
+            }
+        };
+
         let weights: PunktParameters = serde_json::from_str(&json_file_string).expect("Unable to parse weight file.");
 
         Self {
@@ -606,6 +620,7 @@ impl PunktSentenceTokenizer<'_> {
 mod punkt_parameters_tests {
 
     use std::collections::{HashMap, HashSet};
+    use crate::helper::common::Language;
     use crate::tokenize::punkt::{PunktParameters, Collocations, PunktSentenceTokenizer};
 
     pub fn get_static_data() -> PunktParameters {
@@ -642,7 +657,8 @@ mod punkt_parameters_tests {
         It’s a very good sign when your paragraphs are typically composed of a telling key sentence followed by evidence and explanation."#;
 
         let punkt_sentence_tokenizer = PunktSentenceTokenizer::new(
-            "english.json"
+            Some("data/weights/English.json"),
+            None
         );
 
         let sentences = punkt_sentence_tokenizer.tokenize(string, true);

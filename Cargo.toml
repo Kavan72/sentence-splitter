@@ -11,6 +11,10 @@ keywords = ["nlp", "sentence-splitter", "machine-learning", "transformers", "tok
 
 
 [dependencies]
+cached-path = "0.5.1"
+dirs = "4.0.0"
 fancy-regex = "0.7.1"
+lazy_static = { git = "https://github.com/rust-lang-nursery/lazy-static.rs.git" }
 serde_json = "1.0.68"
 serde = { version = "1.0.130", features = ["derive"] }
+thiserror = "1.0.30"

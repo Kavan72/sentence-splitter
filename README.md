@@ -75,7 +75,7 @@ Output:
 
 ## TODO
 
-- [ ] Add direct language support (no need to download weight separately just pass the language and code will download weight file.)
+- [X] Add direct language support (no need to download weight separately just pass the language and code will download weight file.)
 - [ ] Out of index error (mostly if `realign_boundaries` is true)
 
 ## License
