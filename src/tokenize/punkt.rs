@@ -418,7 +418,7 @@ impl PunktSentenceTokenizer<'_> {
         }
     }
 
-    fn tokenize(&self, text: &str, realign_boundaries: bool) -> Vec<String> {
+    pub fn tokenize(&self, text: &str, realign_boundaries: bool) -> Vec<String> {
         self.sentences_from_text(text, realign_boundaries)
     }
 
