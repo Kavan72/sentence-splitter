@@ -1,4 +1,5 @@
-use std::fmt::{Debug, Display, Formatter, Result};
+use std::str::FromStr;
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -22,8 +23,36 @@ pub enum Language {
     Turkish
 }
 
+impl FromStr for Language {
+
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Language, Self::Err> {
+        match input {
+            "Czech"      => Ok(Language::Czech),
+            "Danish"     => Ok(Language::Danish),
+            "Dutch"      => Ok(Language::Dutch),
+            "English"    => Ok(Language::English),
+            "Estonian"   => Ok(Language::Estonian),
+            "Finnish"    => Ok(Language::Finnish),
+            "French"     => Ok(Language::French),
+            "German"     => Ok(Language::German),
+            "Greek"      => Ok(Language::Greek),
+            "Italian"    => Ok(Language::Italian),
+            "Norwegian"  => Ok(Language::Norwegian),
+            "Polish"     => Ok(Language::Polish),
+            "Portuguese" => Ok(Language::Portuguese),
+            "Slovenian"  => Ok(Language::Slovenian),
+            "Spanish"    => Ok(Language::Spanish),
+            "Swedish"    => Ok(Language::Swedish),
+            "Turkish"    => Ok(Language::Turkish),
+            _ => Err(())
+        }
+    }
+}
+
 impl Display for Language {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         write!(f, "{}", {
             let input_string = format!("{:?}", self);
             let mut output: Vec<&str> = Vec::new();
